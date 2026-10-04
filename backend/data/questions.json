@@ -1,0 +1,23 @@
+{
+  "software": [
+    {"id": "q1", "text": "Tell me about yourself and why you are interested in this role.", "kind": "intro"},
+    {"id": "q2", "text": "Describe a challenging technical problem you solved. What was your approach?", "kind": "behavioural"},
+    {"id": "q3", "text": "Tell me about a time you disagreed with a teammate. How did you handle it?", "kind": "behavioural"},
+    {"id": "q4", "text": "Walk me through a project you are proud of and your specific contribution.", "kind": "project"},
+    {"id": "q5", "text": "How do you approach debugging code that fails only in production?", "kind": "technical"},
+    {"id": "q6", "text": "Where do you see yourself growing technically over the next two years?", "kind": "closing"}
+  ],
+  "data": [
+    {"id": "d1", "text": "Tell me about yourself and your interest in data science.", "kind": "intro"},
+    {"id": "d2", "text": "Describe a dataset you cleaned. What problems did you find?", "kind": "behavioural"},
+    {"id": "d3", "text": "Explain a model you built and how you validated it.", "kind": "technical"},
+    {"id": "d4", "text": "Tell me about a time your analysis changed a decision.", "kind": "behavioural"}
+  ],
+  "follow_ups": [
+    "You mentioned the outcome briefly - what was the measurable result?",
+    "What was YOUR specific contribution there, as opposed to the team's?",
+    "What would you do differently if you faced that situation again?",
+    "Can you walk me through the concrete steps you took, in order?",
+    "What was the hardest trade-off you had to make in that decision?"
+  ]
+}

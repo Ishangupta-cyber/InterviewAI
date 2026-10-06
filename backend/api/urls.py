@@ -15,5 +15,6 @@ urlpatterns = [
     path("sessions/<int:sid>/", views.session_detail),
     path("sessions/<int:sid>/answer/", views.answer),
     path("sessions/<int:sid>/finish/", views.finish),
+    path("transcribe/", views.transcribe),
     path("dashboard/", views.dashboard),
 ]

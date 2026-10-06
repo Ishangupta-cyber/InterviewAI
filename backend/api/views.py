@@ -13,6 +13,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 import pipeline
 import registry
 import resume_service
+import stt
 from modules import interviewer_agent
 
 from .models import AIEvaluation, InterviewSession, Question, Report, Resume
@@ -309,3 +310,27 @@ def dashboard(request):
         "latest_report": _report_json(done[-1].report) if done else None,
         "resume_ats": latest.ats_score if latest else None,
     })
+
+
+# ----------------------------------------------------------------- transcribe
+@api_view(["POST"])
+@parser_classes([MultiPartParser])
+def transcribe(request):
+    """Module 4: audio blob from the browser -> text via faster-whisper."""
+    import os
+    import tempfile
+    f = request.FILES.get("audio")
+    if not f:
+        return _err("Attach the recording in the 'audio' field.")
+    if f.size > 25 * 1024 * 1024:
+        return _err("Recording is too large (25 MB max).")
+    suffix = os.path.splitext(f.name)[1] or ".webm"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        for chunk in f.chunks():
+            tmp.write(chunk)
+    try:
+        return Resp(stt.transcribe(tmp.name))
+    except Exception as exc:
+        return _err(f"Transcription failed: {exc}", status.HTTP_500_INTERNAL_SERVER_ERROR)
+    finally:
+        os.unlink(tmp.name)

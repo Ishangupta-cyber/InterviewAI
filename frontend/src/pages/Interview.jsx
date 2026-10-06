@@ -46,7 +46,7 @@ function Setup() {
   );
 }
 
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const CAN_RECORD = !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
 
 function Room({ id }) {
   const nav = useNavigate();
@@ -54,6 +54,7 @@ function Room({ id }) {
   const [text, setText] = useState("");
   const [feedback, setFeedback] = useState(null);
   const [listening, setListening] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [done, setDone] = useState(0);
@@ -65,7 +66,7 @@ function Room({ id }) {
       if (d.session.status === "completed") return nav(`/report/${id}`, { replace: true });
       setQ(d.current_question); setDone(d.session.answered);
     }).catch((e) => setErr(e.message));
-    return () => { window.speechSynthesis?.cancel(); rec.current?.stop(); };
+    return () => { window.speechSynthesis?.cancel(); stopRec(); };
   }, [id]);
 
   useEffect(() => {  // read each new question aloud
@@ -75,19 +76,47 @@ function Room({ id }) {
     started.current = Date.now();
   }, [q?.id]);
 
-  function toggleMic() {
-    if (listening) { rec.current?.stop(); return; }
-    const r = new SR();
-    r.continuous = true; r.interimResults = false; r.lang = "en-US";
-    const base = text ? text + " " : "";
-    r.onresult = (e) => setText(base + Array.from(e.results).map((x) => x[0].transcript).join(" "));
-    r.onend = () => setListening(false);
-    r.onerror = () => setListening(false);
+  function stopRec() {
+    const r = rec.current;
+    if (r && r.state !== "inactive") r.stop();
+    r?.stream?.getTracks().forEach((t) => t.stop());
+  }
+
+  async function toggleMic() {
+    if (listening) { stopRec(); return; }
+    setErr("");
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      setErr(e.name === "NotFoundError"
+        ? "No microphone found. Plug one in or choose it in your system sound settings."
+        : "Microphone access is blocked. Click the lock icon in the address bar, allow the microphone, then try again.");
+      return;
+    }
+    const chunks = [];
+    const r = new MediaRecorder(stream);
+    r.stream = stream;
+    r.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    r.onstop = async () => {
+      setListening(false);
+      stream.getTracks().forEach((t) => t.stop());
+      if (!chunks.length) return;
+      setTranscribing(true);
+      try {
+        const form = new FormData();
+        form.append("audio", new Blob(chunks, { type: r.mimeType }), "answer.webm");
+        const d = await api("/transcribe/", { method: "POST", form });
+        if (!d.text) setErr("No speech detected in that recording. Speak closer to the mic and try again.");
+        else setText((t) => (t ? t + " " : "") + d.text);
+      } catch (x) { setErr(x.message); }
+      finally { setTranscribing(false); }
+    };
     rec.current = r; r.start(); setListening(true);
   }
 
   async function submit() {
-    rec.current?.stop();
+    stopRec();
     setErr(""); setBusy(true);
     try {
       const d = await api(`/sessions/${id}/answer/`, {
@@ -148,11 +177,12 @@ function Room({ id }) {
         </div>
         <p className="question">{q.text}</p>
         <button className="link" onClick={() => { window.speechSynthesis?.cancel(); window.speechSynthesis?.speak(new SpeechSynthesisUtterance(q.text)); }}>🔊 Replay question</button>
-        <textarea rows={7} placeholder={SR ? "Click the mic and speak, or type your answer…" : "Type your answer (voice input needs Chrome/Edge)…"}
+        {!CAN_RECORD && <div className="error">This browser cannot record audio. Use a current Chrome, Edge or Firefox to speak your answer, or type it below.</div>}
+        <textarea rows={7} placeholder={CAN_RECORD ? "Click the mic and speak, or type your answer…" : "Type your answer…"}
           value={text} onChange={(e) => setText(e.target.value)} />
         {err && <div className="error">{err}</div>}
         <div className="row">
-          {SR && <button className={"btn alt" + (listening ? " rec" : "")} onClick={toggleMic}>{listening ? "■ Stop recording" : "🎤 Speak answer"}</button>}
+          {CAN_RECORD && <button className={"btn alt" + (listening ? " rec" : "")} onClick={toggleMic} disabled={transcribing}>{transcribing ? "Transcribing…" : listening ? "■ Stop recording" : "🎤 Speak answer"}</button>}
           <button className="btn" disabled={busy || !text.trim()} onClick={submit}>{busy ? "Evaluating…" : "Submit answer"}</button>
         </div>
       </div>

@@ -85,6 +85,9 @@ MEDIA_URL = "media/"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
+# Speech-to-text model size: tiny.en / base.en / small.en (bigger = more accurate, slower).
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base.en")
+
 USE_TZ = True
 TIME_ZONE = "Asia/Kolkata"
 STATIC_URL = "static/"

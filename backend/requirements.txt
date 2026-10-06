@@ -7,3 +7,5 @@ pypdf>=5.0
 python-docx>=1.1
 google-genai>=1.0
 psycopg[binary]>=3.2
+faster-whisper>=1.1
+av>=14,<19  # av 19 dropped an option faster-whisper 1.2 still passes

@@ -17,13 +17,14 @@ def preprocess(raw: dict) -> dict:
     """Normalise whatever the browser sent into the single session dict that
     every module receives. Real version: extract audio from the video blob,
     run speech-to-text, sample frames at N fps."""
-    # TODO(real): ffmpeg audio split + Whisper transcription + frame sampling.
+    # Transcription happens earlier (POST /api/transcribe/ -> faster-whisper); the browser sends the
+    # word timestamps and a camera summary (MediaPipe runs in the browser, so no video is uploaded).
     return {
         "session_id": raw["session_id"],
         "question": raw.get("question", ""),
         "transcript": raw.get("transcript", ""),
-        "audio_path": raw.get("audio_path"),
-        "video_path": raw.get("video_path"),
+        "words": raw.get("words"),       # [{"word", "start", "end"}] or None for a typed answer
+        "vision": raw.get("vision"),     # camera summary or None when the camera was off
         "duration_sec": raw.get("duration_sec", 0),
     }
 
@@ -36,9 +37,15 @@ def run(raw: dict) -> dict:
     # --- the 5 spokes: independent, order does not matter -------------------
     # TODO(real): these become genuinely parallel (ThreadPool / async) once the
     # models are heavy. Today they are fast enough to run in sequence.
+    # A scorer is left out when it is still a stub (it would return invented numbers) or when it has
+    # nothing to measure (typed answer, camera off). The fusion re-balances over what remains.
     results = []
     for module in registry.SCORERS:
-        results.append(module.analyze(session))
+        if module.MODULE_INFO["status"] == "stub":
+            continue
+        result = module.analyze(session)
+        if result is not None:
+            results.append(result)
 
     # --- the hub: the only place modalities are combined --------------------
     fused = fusion.fuse(results)

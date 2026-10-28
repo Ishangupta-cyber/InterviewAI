@@ -1,0 +1,68 @@
+{
+ "model": "DictVectorizer + LinearSVC",
+ "best_C": 0.05,
+ "class_weight": null,
+ "test_resumes": 20,
+ "overall_strict_entity_level": {
+  "precision": 0.41379310344827586,
+  "recall": 0.38848920863309355,
+  "f1": 0.40074211502782936
+ },
+ "skills_word_level_comparison": [
+  {
+   "system": "Dictionary lookup (current app)",
+   "precision": 0.417,
+   "recall": 0.029,
+   "f1": 0.054
+  },
+  {
+   "system": "Word features + linear SVM",
+   "precision": 0.875,
+   "recall": 0.201,
+   "f1": 0.327
+  }
+ ],
+ "efficiency": {
+  "train_seconds": 11.3,
+  "ms_per_400_words_CPU": 15.5,
+  "model_size_MB": 15.1
+ },
+ "validation_grid": [
+  {
+   "C": 0.05,
+   "class_weight": null,
+   "val_entity_F1": 0.376,
+   "fit_seconds": 13.5
+  },
+  {
+   "C": 0.05,
+   "class_weight": "balanced",
+   "val_entity_F1": 0.318,
+   "fit_seconds": 16.1
+  },
+  {
+   "C": 0.2,
+   "class_weight": null,
+   "val_entity_F1": 0.346,
+   "fit_seconds": 15.9
+  },
+  {
+   "C": 0.2,
+   "class_weight": "balanced",
+   "val_entity_F1": 0.318,
+   "fit_seconds": 33.6
+  },
+  {
+   "C": 1.0,
+   "class_weight": null,
+   "val_entity_F1": 0.304,
+   "fit_seconds": 24.2
+  },
+  {
+   "C": 1.0,
+   "class_weight": "balanced",
+   "val_entity_F1": 0.305,
+   "fit_seconds": 95.4
+  }
+ ]
+}

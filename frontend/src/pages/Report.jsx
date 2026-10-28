@@ -36,6 +36,27 @@ export default function Report() {
         <div className="block"><h4>Suggestions</h4><ul>{r.suggestions.map((s, i) => <li key={i}>{s}</li>)}</ul></div>
       </div>
 
+      {r.roadmap?.focus_areas?.length > 0 && (
+        <div className="card">
+          <div className="row between">
+            <h3>Your improvement roadmap</h3>
+            <span className="muted small">{r.roadmap.source === "llm" ? "Written by Gemini from your scores" : "Rule-based plan from your scores"}</span>
+          </div>
+          {r.roadmap.summary && <p>{r.roadmap.summary}</p>}
+          <div className="grid2">
+            {r.roadmap.focus_areas.map((a, i) => (
+              <div key={i} className="block">
+                <h4>{a.area}</h4>
+                {a.why && <p className="muted small">{a.why}</p>}
+                <ul>{a.actions.map((x, j) => <li key={j}>{x}</li>)}</ul>
+                {a.practice_resources?.length > 0 && <p className="muted small">Practise with: {a.practice_resources.join(", ")}</p>}
+              </div>
+            ))}
+          </div>
+          {r.roadmap.next_session_goal && <p className="note">Goal for your next session: {r.roadmap.next_session_goal}</p>}
+        </div>
+      )}
+
       <h3>Question by question</h3>
       {d.answers.map((a, i) => (
         <div key={i} className="card">

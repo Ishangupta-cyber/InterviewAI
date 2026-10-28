@@ -55,3 +55,7 @@ textarea { resize: vertical; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
 th { color: var(--muted); font-weight: 500; }
+
+.cam { display: flex; flex-direction: column; gap: 8px; }
+.cam-video { width: 200px; max-width: 100%; border-radius: 10px; background: #000; transform: scaleX(-1); }
+.cam-video.off { display: none; }

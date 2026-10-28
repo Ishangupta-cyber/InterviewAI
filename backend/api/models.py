@@ -74,4 +74,5 @@ class Report(models.Model):
     strengths = models.JSONField(default=list)
     weaknesses = models.JSONField(default=list)
     suggestions = models.JSONField(default=list)
+    roadmap = models.JSONField(default=dict)   # improvement plan (LLM or rule-based)
     created_at = models.DateTimeField(auto_now_add=True)

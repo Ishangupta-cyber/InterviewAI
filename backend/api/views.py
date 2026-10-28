@@ -13,6 +13,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 import pipeline
 import registry
 import resume_service
+import roadmap
 import stt
 from modules import interviewer_agent
 
@@ -198,6 +199,25 @@ def session_detail(request, sid):
                  "report": _report_json(s.report) if hasattr(s, "report") else None})
 
 
+def _clean_words(raw, transcript):
+    """Word timestamps from /api/transcribe/, sent back by the browser. Returns a clean list or None.
+
+    Speech metrics are only trusted when the audio covers most of the final answer: if the candidate
+    typed or heavily edited the text, the recording no longer describes what they submitted.
+    """
+    if not isinstance(raw, list) or not raw:
+        return None
+    words = []
+    for w in raw[:5000]:
+        try:
+            words.append({"word": str(w["word"])[:40], "start": float(w["start"]), "end": float(w["end"])})
+        except (KeyError, TypeError, ValueError):
+            return None
+    if len(words) < 0.5 * max(len(transcript.split()), 1):
+        return None
+    return words
+
+
 @api_view(["POST"])
 def answer(request, sid):
     s = _own_session(request, sid)
@@ -217,12 +237,14 @@ def answer(request, sid):
         duration = 0
 
     result = pipeline.run({"session_id": str(s.id), "question": q.text,
-                           "transcript": transcript, "duration_sec": duration})
+                           "transcript": transcript, "duration_sec": duration,
+                           "words": _clean_words(request.data.get("words"), transcript),
+                           "vision": request.data.get("vision")})
     resp = AnswerRow.objects.create(question=q, answer_text=transcript, duration_sec=duration)
     mods = {m["module_id"]: m["score"] for m in result["modules"]}
     AIEvaluation.objects.create(response=resp, overall_score=result["fusion"]["overall_score"],
                                 technical_score=mods.get("nlp_score", 0),
-                                communication_score=mods.get("speech", 0), result=result)
+                                communication_score=mods.get("speech", mods.get("nlp_score", 0)), result=result)
 
     pending = list(s.questions.filter(response__isnull=True).order_by("order"))
     nxt = pipeline.next_question(
@@ -262,18 +284,21 @@ def _finish(s):
     tips = list(dict.fromkeys(notes))  # de-duplicate, keep order
     s.status, s.end_time = "completed", timezone.now()
     s.save(update_fields=["status", "end_time"])
+    qa = [{"question": q.text, "answer": q.response.answer_text, "score": q.response.evaluation.overall_score}
+          for q in s.questions.filter(response__isnull=False)]
     report, _ = Report.objects.update_or_create(session=s, defaults={
         "total_score": total,
         "strengths": [f"{k} ({v})" for k, v in avgs.items() if v >= 70],
         "weaknesses": [f"{k} ({v})" for k, v in avgs.items() if v < 60],
         "suggestions": tips[:8],
+        "roadmap": roadmap.build(s.role, avgs, qa),
     })
     return report
 
 
 def _report_json(r):
     return {"total_score": r.total_score, "strengths": r.strengths, "weaknesses": r.weaknesses,
-            "suggestions": r.suggestions, "created_at": r.created_at.isoformat()}
+            "suggestions": r.suggestions, "roadmap": r.roadmap, "created_at": r.created_at.isoformat()}
 
 
 @api_view(["POST"])

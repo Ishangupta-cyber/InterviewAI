@@ -22,10 +22,15 @@ def _get_model():
         return _model
 
 
+# Whisper tends to delete "um" and "uh". A prompt that contains them makes it keep them, so filler counts are real.
+FILLER_PROMPT = "Umm, let me think, like, hmm... Okay, so, uh, basically I would say, you know, it is, um, like this."
+
+
 def transcribe(path: str) -> dict:
     """Returns {"text", "duration", "words": [{"word", "start", "end"}]}."""
     segments, info = _get_model().transcribe(
-        path, language="en", vad_filter=True, word_timestamps=True, beam_size=1)
+        path, language="en", vad_filter=True, word_timestamps=True, beam_size=1,
+        initial_prompt=FILLER_PROMPT)
     text_parts, words = [], []
     for seg in segments:
         text_parts.append(seg.text.strip())

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api.js";
+import { FaceTracker } from "../vision/tracker.js";
 
 function Setup() {
   const nav = useNavigate();
@@ -60,6 +61,12 @@ function Room({ id }) {
   const [done, setDone] = useState(0);
   const started = useRef(Date.now());
   const rec = useRef(null);
+  const wordsRef = useRef([]);       // word timestamps of everything spoken for this answer (from Whisper)
+  const audioOffset = useRef(0);     // seconds of audio already recorded, so several recordings share one timeline
+  const tracker = useRef(null);
+  const videoRef = useRef(null);
+  const [camOn, setCamOn] = useState(false);
+  const [camStatus, setCamStatus] = useState("");
 
   useEffect(() => {
     api(`/sessions/${id}/`).then((d) => {
@@ -75,6 +82,28 @@ function Room({ id }) {
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(q.text));
     started.current = Date.now();
   }, [q?.id]);
+
+  useEffect(() => {  // a new question starts a new answer: clear the speech timeline and restart camera sampling
+    wordsRef.current = []; audioOffset.current = 0;
+    tracker.current?.setActive(true);
+  }, [q?.id]);
+
+  useEffect(() => {  // camera analysis is opt-in; everything runs in the browser
+    if (!camOn) return;
+    let cancelled = false;
+    const t = new FaceTracker();
+    tracker.current = t;
+    setCamStatus("Loading face model…");
+    t.start(videoRef.current)
+      .then(() => { if (!cancelled) { setCamStatus("Camera analysis on"); t.setActive(true); } })
+      .catch((e) => {
+        if (cancelled) return;
+        setCamOn(false);
+        setCamStatus(e?.name === "NotAllowedError" ? "Camera access is blocked. Allow it in the address bar to use this."
+          : e?.name === "NotFoundError" ? "No camera found." : "Could not start camera analysis: " + (e?.message || e));
+      });
+    return () => { cancelled = true; t.stop(); tracker.current = null; };
+  }, [camOn]);
 
   function stopRec() {
     const r = rec.current;
@@ -108,7 +137,12 @@ function Room({ id }) {
         form.append("audio", new Blob(chunks, { type: r.mimeType }), "answer.webm");
         const d = await api("/transcribe/", { method: "POST", form });
         if (!d.text) setErr("No speech detected in that recording. Speak closer to the mic and try again.");
-        else setText((t) => (t ? t + " " : "") + d.text);
+        else {
+          setText((t) => (t ? t + " " : "") + d.text);
+          const off = audioOffset.current;
+          wordsRef.current.push(...(d.words || []).map((w) => ({ ...w, start: w.start + off, end: w.end + off })));
+          audioOffset.current += d.duration || 0;
+        }
       } catch (x) { setErr(x.message); }
       finally { setTranscribing(false); }
     };
@@ -119,8 +153,13 @@ function Room({ id }) {
     stopRec();
     setErr(""); setBusy(true);
     try {
+      const vision = tracker.current?.takeSummary() || null;
+      tracker.current?.setActive(false);
       const d = await api(`/sessions/${id}/answer/`, {
-        method: "POST", body: { transcript: text, duration_sec: Math.round((Date.now() - started.current) / 1000) },
+        method: "POST", body: {
+          transcript: text, duration_sec: Math.round((Date.now() - started.current) / 1000),
+          words: wordsRef.current.length ? wordsRef.current : null, vision,
+        },
       });
       setFeedback(d); setDone(d.answered); setText("");
     } catch (x) { setErr(x.message); } finally { setBusy(false); }
@@ -139,10 +178,21 @@ function Room({ id }) {
   if (err && !q) return <div className="error">{err}</div>;
   if (!q) return <p className="muted">Loading…</p>;
 
+  const cam = (
+    <div className="cam">
+      <video ref={videoRef} muted playsInline className={"cam-video" + (camOn ? "" : " off")} />
+      <div className="row">
+        <button className="btn alt" onClick={() => setCamOn((v) => !v)}>{camOn ? "📷 Turn camera off" : "📷 Turn camera on"}</button>
+        <span className="muted small">{camStatus || "Optional: scores eye contact and expression. Video stays in your browser; only a few summary numbers are sent."}</span>
+      </div>
+    </div>
+  );
+
   if (feedback) {
     const f = feedback.result.fusion;
     return (
       <div className="stack">
+        {cam}
         <div className="card">
           <div className="row between">
             <h3>Feedback</h3>
@@ -156,6 +206,13 @@ function Room({ id }) {
               {m.notes.map((n, i) => <p key={i} className="muted small">{n}</p>)}
             </div>
           ))}
+          {(() => {
+            const ids = feedback.result.modules.map((m) => m.module_id);
+            const missing = [];
+            if (!ids.includes("speech")) missing.push("speech pace and fillers (answer with the mic)");
+            if (!ids.includes("eye_gaze")) missing.push("eye contact and expression (turn the camera on)");
+            return missing.length ? <p className="note">Not measured for this answer: {missing.join("; ")}.</p> : null;
+          })()}
           {!feedback.result.guard.passed && feedback.result.guard.flags.map((x, i) => <div key={i} className="error">{x}</div>)}
           {feedback.next_question?.kind === "follow-up probe" && <p className="note">Next is a follow-up: {feedback.next_question.reason}</p>}
           <button className="btn" onClick={next}>{feedback.next_question ? "Next question →" : "View report →"}</button>
@@ -170,6 +227,7 @@ function Room({ id }) {
         <h2>Interview</h2>
         <span className="muted">{done} answered · <button className="link" onClick={endEarly}>End &amp; get report</button></span>
       </div>
+      {cam}
       <div className="card">
         <div className="chips">
           <span className="chip">{q.category}</span><span className="chip">{q.difficulty}</span>

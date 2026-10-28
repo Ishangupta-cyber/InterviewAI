@@ -124,8 +124,7 @@ function Room({ id }) {
       return;
     }
     const chunks = [];
-    const r = new MediaRecorder(stream);
-    r.stream = stream;
+    const r = new MediaRecorder(stream);   // r.stream is a built-in read-only property, so it must not be assigned
     r.ondataavailable = (e) => e.data.size && chunks.push(e.data);
     r.onstop = async () => {
       setListening(false);
